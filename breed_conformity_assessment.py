@@ -22,11 +22,6 @@ def jaccard_similarity(a, b):
     union = len(set(a).union(set(b)))
     return intersection / union
 
-
-def individual_index(individual_codes, code):
-    return np.where(individual_codes == code)[0][0]
-
-
 dataset_file_name = 'dataset_tazy_microsat_223.csv'
 
 with open(dataset_file_name, mode='r', encoding='windows-1252') as csv_file:
@@ -147,6 +142,73 @@ def breed_snp(individual_id, similarity_matrix):
     individual_median_similarity = np.median(individual_similarity_row)
     correspondence_percentage = min(individual_median_similarity/max_median_similarity, 1.0)*100
     return correspondence_percentage
+
+
+
+
+def assess_external_individual_microsatellite(alleles, genotypes, similarity_matrix, similarity_method=0):
+    """
+    Calculate breed correspondence percentage for an external individual 
+    using microsatellite genotype data.
+
+    Parameters:
+        alleles (list): List of integers representing microsatellite alleles (e.g., [89, 89, 118, 118, ...])
+        genotypes (np.ndarray): Genotype matrix from the dataset (n_samples x 2N)
+        similarity_matrix (np.ndarray): Precomputed similarity matrix of dataset individuals
+        similarity_method (int): 0 = PSA, 1 = Jaccard
+
+    Returns:
+        float: Breed correspondence percentage
+    """
+    individual_similarity_row = calc_similarity_row(alleles, genotypes, similarity_method)
+    max_median_similarity = np.max(np.median(similarity_matrix, axis=1))
+    individual_median_similarity = np.median(individual_similarity_row)
+
+    if max_median_similarity == 0:
+        return 0.0
+
+    correspondence_percentage = min(individual_median_similarity / max_median_similarity, 1.0) * 100
+    return correspondence_percentage
+
+
+
+def assess_external_individual_snp(genotype_list, vectors, similarity_matrix):
+    """
+    Calculate breed correspondence percentage for an external individual 
+    using SNP genotype data.
+
+    Parameters:
+        genotype_list (list): List of genotype strings (e.g., ['0/0', '0/1', 'missing', ...])
+        vectors (np.ndarray): Existing one-hot encoded dataset matrix (n_samples x features)
+        similarity_matrix (np.ndarray): Precomputed cosine similarity matrix for the dataset
+
+    Returns:
+        float: Breed correspondence percentage
+    """
+    # Reuse one-hot encoding
+    encoded = [one_hot_encode(gt) for gt in genotype_list]
+    flat_vector = np.array(encoded).flatten()
+
+    # Normalize external individual vector
+    norm = np.linalg.norm(flat_vector)
+    if norm > 0:
+        flat_vector = flat_vector / norm
+
+    # Normalize dataset vectors if not already normalized
+    norm_vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+    # Compute similarity to all dataset individuals
+    similarity_row = np.dot(norm_vectors, flat_vector)
+
+    max_median_similarity = np.max(np.median(similarity_matrix, axis=1))
+    individual_median_similarity = np.median(similarity_row)
+
+    if max_median_similarity == 0:
+        return 0.0
+
+    correspondence_percentage = min(individual_median_similarity / max_median_similarity, 1.0) * 100
+    return correspondence_percentage
+
     
 
 similarity_matrix = cosine_similarity_matrix(vectors)
@@ -166,7 +228,6 @@ for individual_code in individuals:
     individual_id = individual_index(individuals, individual_code)
     correspondence_percentage = breed_snp(individual_id, similarity_matrix)
     breed_snp_cosine.append(correspondence_percentage)
-
 
 
 
